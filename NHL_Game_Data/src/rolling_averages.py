@@ -4,10 +4,12 @@ from pathlib import Path
 import pandas as pd
 
 
-DATA_DIR = Path(__file__).resolve().parent
-GAMELOG = DATA_DIR / "nhl_complete_team_stats_2025_26.csv"
-OUTPUT = DATA_DIR / "nhl_team_gamelog_with_rolling_averages.csv"
-CLEAN_OUTPUT = DATA_DIR / "nhl_team_rolling_averages_clean.csv"
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+RAW_DIR = PROJECT_DIR / "data" / "raw"
+PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
+GAMELOG = RAW_DIR / "nhl_complete_team_stats_2025_26.csv"
+OUTPUT = PROCESSED_DIR / "nhl_team_gamelog_with_rolling_averages.csv"
+CLEAN_OUTPUT = PROCESSED_DIR / "nhl_team_rolling_averages_clean.csv"
 
 ROLLING_STATS = [
     "goals_for", "goals_against", "shots_for", "shots_against",

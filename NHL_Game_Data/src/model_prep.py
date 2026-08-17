@@ -3,10 +3,12 @@
 from pathlib import Path
 import pandas as pd
 
-DATA_DIR = Path(__file__).resolve().parent
-GAMELOG = DATA_DIR / "nhl_complete_team_stats_2025_26.csv"
-ROLLING = DATA_DIR / "nhl_team_rolling_averages_clean.csv"
-OUTPUT = DATA_DIR / "nhl_model_data.csv"
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+RAW_DIR = PROJECT_DIR / "data" / "raw"
+PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
+GAMELOG = RAW_DIR / "nhl_complete_team_stats_2025_26.csv"
+ROLLING = PROCESSED_DIR / "nhl_team_rolling_averages_clean.csv"
+OUTPUT = PROCESSED_DIR / "nhl_model_data.csv"
 
 BASE_STATS = [
     "team_id", "team_name", "goals_for", "goals_against", "shots_for",
