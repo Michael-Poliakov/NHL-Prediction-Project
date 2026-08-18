@@ -31,7 +31,7 @@ def build_rolling_averages(games: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
     rolling = {}
     for window in (5, 10):
         prior = games.groupby("team_id", sort=False)[ROLLING_STATS].transform(
-            lambda s: s.shift(1).rolling(window, min_periods=1).mean()
+            lambda s: s.shift(1).rolling(window, min_periods=window).mean()
         )
         for col in ROLLING_STATS:
             rolling[f"{col}_rolling_{window}"] = prior[col]

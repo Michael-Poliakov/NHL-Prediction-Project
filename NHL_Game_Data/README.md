@@ -14,6 +14,7 @@ From the `NHL_Game_Data` directory:
 ```bash
 python src/rolling_averages.py
 python src/model_prep.py
+python src/train_model.py
 ```
 
 The scripts use paths relative to the project directory, so they can be run
@@ -37,3 +38,7 @@ src/rolling_averages.py
                                       ▼
                        data/processed/nhl_model_data.csv
 ```
+
+Training artifacts are saved under `models/`. The model uses only complete
+5- and 10-game prior histories, matchup-difference features, a chronological
+holdout, and time-series cross-validation.

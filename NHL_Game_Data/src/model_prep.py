@@ -50,7 +50,18 @@ def prepare_model_data(games: pd.DataFrame, rolling: pd.DataFrame) -> pd.DataFra
             out[f"{side}_rolling_team_row_number"] = row["team_row_number"]
         rows.append(out)
 
-    return pd.DataFrame(rows)
+    result = pd.DataFrame(rows)
+    if result.empty:
+        return result
+
+    # Matchup features make the comparison between teams explicit and reduce
+    # the burden on the model to discover useful home-versus-away contrasts.
+    for stat in ROLLING_STATS:
+        for window in ("avg5", "avg10"):
+            home = f"home_rolling_{stat}_{window}"
+            away = f"away_rolling_{stat}_{window}"
+            result[f"matchup_{stat}_{window}"] = result[home] - result[away]
+    return result
 
 
 if __name__ == "__main__":
