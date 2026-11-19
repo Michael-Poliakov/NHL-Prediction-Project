@@ -1,0 +1,76 @@
+NHL Game Prediction Project - Progress Summary
+==============================================
+Date: May 2, 2026
+
+
+GOAL
+----
+Build a machine learning model that predicts NHL game winners using
+game-by-game data, then extend that into a Stanley Cup playoff simulator.
+
+
+PROGRESS
+--------
+
+1. SEASON SCHEDULE (COMPLETE)
+   - Endpoint: api-web.nhle.com/v1/schedule/{date}
+   - Season: 20252026
+   - Fixed pagination bug — API returns one week at a time, not one month.
+     Solution: follow "nextStartDate" from each response instead of jumping
+     by month, which was skipping weeks and only returning ~305 games.
+   - Now correctly fetches all ~1,312 regular season games.
+   - Output: nhl_games_2025_26.csv
+
+
+2. BOX SCORE / TEAM STATS (COMPLETE)
+   - Explored multiple endpoints before finding the right one:
+       * /gamecenter/{id}/boxscore  — teamGameStats was null
+       * /gamecenter/{id}/landing   — summary was empty
+       * playerByGameStats          — player-level only, required aggregation
+       * api.nhle.com/stats/rest/en/team/summary?cayenneExp=gameId={id}  ✅
+   - Final endpoint returns clean team-level stats per game including:
+       goals, shots for/against, faceoff %, power play %, penalty kill %,
+       wins, shutouts
+   - Output: nhl_team_gamelog_2025_26.csv
+
+
+3. SHOT LOCATION DATA (COMPLETE)
+   - Endpoint: api-web.nhle.com/v1/gamecenter/{id}/play-by-play
+   - Captures every shot event with x/y rink coordinates
+   - Event types: shot-on-goal, goal, missed-shot, blocked-shot
+   - Additional fields: shot type, zone (O/D/N), period, time, shooter ID,
+     goalie ID
+   - Rink coordinates: x from -100 to 100, y from -42.5 to 42.5, (0,0) = center ice
+   - Enables: shot heatmaps, danger zone %, and custom expected goals (xG) model
+
+
+4. SORTING (COMPLETE)
+   - Date field was unreliable in the API response
+   - Solution: sort by game_id instead — IDs are sequential so higher ID
+     always means a later game
+   - Applied to both the gamelog and rolling feature calculations
+
+
+5. ROLLING FEATURES (DESIGNED, NOT YET RUN)
+   - Plan: 5-game and 10-game rolling averages for all stats
+   - Uses shift(1) to prevent data leakage (only past games used)
+   - Grouped by team and sorted by game_id
+
+
+NEXT STEPS
+----------
+1. Run rolling feature engineering on the completed gamelog
+2. Build the model DataFrame — one row per matchup with both teams' 
+   rolling stats side by side
+3. Train a Logistic Regression model first (interpretable, good baseline)
+4. Upgrade to XGBoost for better accuracy
+5. Build the playoff bracket Monte Carlo simulator
+   - Simulate each series 10,000+ times using model win probabilities
+   - Output: each team's probability of winning each round and the Cup
+
+
+TECH STACK
+----------
+- Python, pandas, requests, scikit-learn, xgboost
+- NHL Stats API (free, no key required)
+- NHL legacy stats API (api.nhle.com/stats/rest)
