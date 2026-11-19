@@ -26,16 +26,23 @@ def build_rolling_averages(games: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
     games = games.copy()
     games["game_id"] = games["game_id"].astype(str)
     games["game_date"] = pd.to_datetime(games["game_date"], errors="raise")
-    games = games.sort_values(["team_id", "game_date", "game_id"], kind="stable").reset_index(drop=True)
+    # NHL game IDs start with the season's first calendar year. Keeping this
+    # key in the rolling group prevents prior-season form carrying over the
+    # offseason into a new season's 5- and 10-game windows.
+    games["_season_id"] = games["game_id"].str[:4]
+    games = games.sort_values(
+        ["team_id", "_season_id", "game_date", "game_id"], kind="stable"
+    ).reset_index(drop=True)
 
     rolling = {}
     for window in (5, 10):
-        prior = games.groupby("team_id", sort=False)[ROLLING_STATS].transform(
+        prior = games.groupby(["team_id", "_season_id"], sort=False)[ROLLING_STATS].transform(
             lambda s: s.shift(1).rolling(window, min_periods=window).mean()
         )
         for col in ROLLING_STATS:
             rolling[f"{col}_rolling_{window}"] = prior[col]
 
+    games = games.drop(columns="_season_id")
     full = pd.concat([games, pd.DataFrame(rolling, index=games.index)], axis=1)
     full = full.sort_values(["game_id", "team_id"], kind="stable").reset_index(drop=True)
 

@@ -34,8 +34,9 @@ backfill.
 Each season is saved as its own raw CSV set. The rolling-average and model
 preparation steps automatically combine all matching complete team-game files
 in `data/raw/`, so rerun those steps after collecting additional seasons.
-Rolling features use each team's previous games across season boundaries; the
-first games in a season can therefore use the prior season's history.
+Rolling 5- and 10-game features reset at each season boundary, so they describe
+current-season form only. The first five or ten games for a team have missing
+rolling values until enough games have been played.
 
 The scripts use paths relative to the project directory, so they can be run
 from any working directory. `Model.ipynb` consumes the generated
