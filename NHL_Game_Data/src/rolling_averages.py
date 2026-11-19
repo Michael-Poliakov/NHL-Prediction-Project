@@ -7,7 +7,6 @@ import pandas as pd
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 RAW_DIR = PROJECT_DIR / "data" / "raw"
 PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
-GAMELOG = RAW_DIR / "nhl_complete_team_stats_2025_26.csv"
 OUTPUT = PROCESSED_DIR / "nhl_team_gamelog_with_rolling_averages.csv"
 CLEAN_OUTPUT = PROCESSED_DIR / "nhl_team_rolling_averages_clean.csv"
 
@@ -26,7 +25,8 @@ def build_rolling_averages(games: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
     """
     games = games.copy()
     games["game_id"] = games["game_id"].astype(str)
-    games = games.sort_values(["team_id", "game_id"], kind="stable").reset_index(drop=True)
+    games["game_date"] = pd.to_datetime(games["game_date"], errors="raise")
+    games = games.sort_values(["team_id", "game_date", "game_id"], kind="stable").reset_index(drop=True)
 
     rolling = {}
     for window in (5, 10):
@@ -49,7 +49,11 @@ def build_rolling_averages(games: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
 
 
 if __name__ == "__main__":
-    raw = pd.read_csv(GAMELOG)
+    files = sorted(RAW_DIR.glob("nhl_complete_team_stats_*.csv"))
+    if not files:
+        raise FileNotFoundError(f"No complete team-game files found in {RAW_DIR}")
+    raw = pd.concat((pd.read_csv(path) for path in files), ignore_index=True)
+    raw = raw.drop_duplicates(["game_id", "team_id"], keep="last")
     full, clean = build_rolling_averages(raw)
     full.to_csv(OUTPUT, index=False)
     clean.to_csv(CLEAN_OUTPUT, index=False)

@@ -1,7 +1,8 @@
 """Download NHL game, team, and player-derived team statistics.
 
 Run from NHL_Game_Data with:
-    python src/pull_data.py --season 20252026
+    python src/pull_data.py
+    python src/pull_data.py --seasons 20192020 20202021 20212022 20222023 20232024 20242025 20252026
 
 The script is deliberately restartable: each run writes complete output files
 only after the corresponding collection step finishes successfully.
@@ -58,7 +59,13 @@ def get_schedule(client: requests.Session, start_date: str, end_date: str, delay
         data = get_json(client, f"https://api-web.nhle.com/v1/schedule/{current}", delay)
         for week in data.get("gameWeek", []):
             for game in week.get("games", []):
-                if game.get("gameType") != 2 or game.get("gameState") != "OFF":
+                # Schedule game objects commonly omit gameDate; the containing
+                # gameWeek date is the NHL's official schedule date.
+                game_date = game.get("gameDate") or week.get("date")
+                if (
+                    not game_date or game_date < start_date or game_date > end_date
+                    or game.get("gameType") != 2 or game.get("gameState") != "OFF"
+                ):
                     continue
                 home, away = game.get("homeTeam", {}), game.get("awayTeam", {})
                 games.append({
@@ -75,7 +82,16 @@ def get_schedule(client: requests.Session, start_date: str, end_date: str, delay
         if not next_date or next_date == current:
             break
         current = next_date
-    return pd.DataFrame(games).drop_duplicates("game_id").sort_values("game_id").reset_index(drop=True)
+    columns = [
+        "game_id", "game_date", "home_team_id", "away_team_id", "home_team",
+        "away_team", "home_score", "away_score",
+    ]
+    return (
+        pd.DataFrame(games, columns=columns)
+        .drop_duplicates("game_id")
+        .sort_values("game_id")
+        .reset_index(drop=True)
+    )
 
 
 def get_team_game_stats(client: requests.Session, schedule: pd.DataFrame, delay: float) -> pd.DataFrame:
@@ -84,9 +100,15 @@ def get_team_game_stats(client: requests.Session, schedule: pd.DataFrame, delay:
         url = "https://api.nhle.com/stats/rest/en/team/summary"
         data = get_json(client, f"{url}?cayenneExp=gameId={game['game_id']}", delay).get("data", [])
         for team in data:
+            team_id = team.get("teamId")
+            side = (
+                "home" if team_id == game.get("home_team_id")
+                else "away" if team_id == game.get("away_team_id")
+                else None
+            )
             rows.append({
                 "game_id": game["game_id"], "game_date": game["game_date"],
-                "team_id": team.get("teamId"), "team_name": team.get("teamFullName"),
+                "team_id": team_id, "team_name": team.get("teamFullName"), "side": side,
                 "goals_for": team.get("goalsFor"), "goals_against": team.get("goalsAgainst"),
                 "shots_for": team.get("shotsForPerGame"), "shots_against": team.get("shotsAgainstPerGame"),
                 "faceoff_win_pct": team.get("faceoffWinPct"),
@@ -126,25 +148,37 @@ def get_player_derived_stats(client: requests.Session, schedule: pd.DataFrame, d
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--season", default="20252026")
-    parser.add_argument("--start-date", default="2025-10-01")
-    parser.add_argument("--end-date", default="2026-04-30")
+    parser.add_argument(
+        "--seasons", nargs="+", default=["20242025", "20252026"],
+        help="Season IDs in YYYYyyyy format; defaults to the two most recent seasons.",
+    )
     parser.add_argument("--delay", type=float, default=0.25)
     args = parser.parse_args()
 
     client = session()
-    schedule = get_schedule(client, args.start_date, args.end_date, args.delay)
-    team = get_team_game_stats(client, schedule, args.delay)
-    player = get_player_derived_stats(client, schedule, args.delay)
-    complete = team.merge(player, on=["game_id", "team_id"], how="left")
-    complete = complete.sort_values(["game_id", "team_id"]).reset_index(drop=True)
+    for season in args.seasons:
+        if len(season) != 8 or not season.isdigit():
+            parser.error(f"Invalid season {season!r}; use YYYYyyyy, for example 20242025")
+        start_year = int(season[:4])
+        if int(season[4:]) != start_year + 1:
+            parser.error(f"Invalid season {season!r}; ending year must follow starting year")
 
-    season_label = f"{args.season[:4]}_{args.season[-2:]}"
-    schedule.to_csv(RAW_DIR / f"nhl_schedule_{args.season}.csv", index=False)
-    team.to_csv(RAW_DIR / f"nhl_team_gamelog_{season_label}.csv", index=False)
-    player.to_csv(RAW_DIR / f"nhl_team_stats_from_players_{season_label}.csv", index=False)
-    complete.to_csv(RAW_DIR / f"nhl_complete_team_stats_{season_label}.csv", index=False)
-    print(f"Saved {len(schedule)} games and {len(complete)} complete team-game rows")
+        # A broad date range accommodates season schedule variations; gameType=2
+        # in get_schedule filters out preseason and playoff games.
+        start_date = f"{start_year}-10-01"
+        end_date = f"{start_year + 1}-06-30"
+        schedule = get_schedule(client, start_date, end_date, args.delay)
+        team = get_team_game_stats(client, schedule, args.delay)
+        player = get_player_derived_stats(client, schedule, args.delay)
+        complete = team.merge(player, on=["game_id", "team_id"], how="left")
+        complete = complete.sort_values(["game_date", "game_id", "team_id"]).reset_index(drop=True)
+
+        season_label = f"{season[:4]}_{season[-2:]}"
+        schedule.to_csv(RAW_DIR / f"nhl_schedule_{season}.csv", index=False)
+        team.to_csv(RAW_DIR / f"nhl_team_gamelog_{season_label}.csv", index=False)
+        player.to_csv(RAW_DIR / f"nhl_team_stats_from_players_{season_label}.csv", index=False)
+        complete.to_csv(RAW_DIR / f"nhl_complete_team_stats_{season_label}.csv", index=False)
+        print(f"{season_label}: saved {len(schedule)} games and {len(complete)} team-game rows")
 
 
 if __name__ == "__main__":
