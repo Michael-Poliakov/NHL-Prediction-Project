@@ -27,6 +27,10 @@ example:
 python src/pull_data.py --seasons 20192020 20202021 20212022 20222023 20232024 20242025 20252026
 ```
 
+The collector uses four workers by default and keeps a 0.25-second delay per
+request. Use `--workers` to adjust concurrency if the NHL API rate-limits the
+backfill.
+
 Each season is saved as its own raw CSV set. The rolling-average and model
 preparation steps automatically combine all matching complete team-game files
 in `data/raw/`, so rerun those steps after collecting additional seasons.
