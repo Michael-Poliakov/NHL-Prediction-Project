@@ -12,10 +12,30 @@
 From the `NHL_Game_Data` directory:
 
 ```bash
+python src/pull_data.py
 python src/rolling_averages.py
 python src/model_prep.py
 python src/train_model.py
 ```
+
+The collector now downloads the 2024–25 and 2025–26 regular seasons by
+default. To backfill more seasons, pass season IDs as the start year followed
+by the next year, for
+example:
+
+```bash
+python src/pull_data.py --seasons 20192020 20202021 20212022 20222023 20232024 20242025 20252026
+```
+
+The collector uses four workers by default and keeps a 0.25-second delay per
+request. Use `--workers` to adjust concurrency if the NHL API rate-limits the
+backfill.
+
+Each season is saved as its own raw CSV set. The rolling-average and model
+preparation steps automatically combine all matching complete team-game files
+in `data/raw/`, so rerun those steps after collecting additional seasons.
+Rolling features use each team's previous games across season boundaries; the
+first games in a season can therefore use the prior season's history.
 
 The scripts use paths relative to the project directory, so they can be run
 from any working directory. `Model.ipynb` consumes the generated
@@ -24,7 +44,7 @@ from any working directory. `Model.ipynb` consumes the generated
 ## Data flow
 
 ```text
-data/raw/nhl_complete_team_stats_2025_26.csv
+data/raw/nhl_complete_team_stats_YYYY_YY.csv (one file per season)
         │
         ▼
 src/rolling_averages.py
@@ -41,4 +61,7 @@ src/rolling_averages.py
 
 Training artifacts are saved under `models/`. The model uses only complete
 5- and 10-game prior histories, matchup-difference features, a chronological
-holdout, and time-series cross-validation.
+holdout, and time-series cross-validation. Schedule team IDs determine home
+and away rows, so CSV row order does not affect matchup construction. Rate
+statistics that are undefined for a game are median-imputed inside the
+training pipeline; games without a full ten-game history are excluded.

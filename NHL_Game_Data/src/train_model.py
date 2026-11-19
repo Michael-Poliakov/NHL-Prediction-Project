@@ -8,6 +8,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 
 
@@ -24,9 +25,18 @@ def feature_columns(df: pd.DataFrame) -> list[str]:
 
 def train_and_evaluate(df: pd.DataFrame) -> tuple[Pipeline, pd.DataFrame]:
     df = df.copy()
+    if "game_date" in df.columns:
+        df["game_date"] = pd.to_datetime(df["game_date"], errors="raise")
+        df = df.sort_values(["game_date", "game_id"], kind="stable")
     df["home_team_win"] = (df["home_goals_for"] > df["away_goals_for"]).astype(int)
     features = feature_columns(df)
-    df = df.dropna(subset=features).reset_index(drop=True)
+    # Require a full ten-game history for both teams. Some rate stats are
+    # undefined in games with no opportunities, so impute those within each
+    # training fold instead of discarding otherwise usable games.
+    history_columns = [
+        "home_rolling_goals_for_avg10", "away_rolling_goals_for_avg10",
+    ]
+    df = df.dropna(subset=history_columns).reset_index(drop=True)
     if len(df) < 30:
         raise ValueError("Not enough complete rolling-history games to train reliably")
 
@@ -36,6 +46,7 @@ def train_and_evaluate(df: pd.DataFrame) -> tuple[Pipeline, pd.DataFrame]:
     y_train, y_test = y.iloc[:split], y.iloc[split:]
 
     pipeline = Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
         ("scaler", StandardScaler()),
         ("model", LogisticRegression(max_iter=2000, class_weight="balanced")),
     ])
