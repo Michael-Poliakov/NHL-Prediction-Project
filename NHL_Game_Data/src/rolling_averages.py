@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import pandas as pd
+from game_dates import resolve_dates
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
@@ -23,7 +24,11 @@ def build_rolling_averages(games: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
     Each row's rolling values use only games before that row. This prevents
     the result from leaking the current game's outcome into model features.
     """
-    games = games.copy()
+    games = resolve_dates(games)
+    if games.duplicated(["game_id", "team_id"]).any():
+        raise ValueError("Duplicate team-game rows")
+    if games.duplicated(["team_id", "game_date"]).any():
+        raise ValueError("Multiple games for a team on the same date")
     games["game_id"] = games["game_id"].astype(str)
     games["game_date"] = pd.to_datetime(games["game_date"], errors="raise")
     # NHL game IDs start with the season's first calendar year. Keeping this
@@ -60,7 +65,6 @@ if __name__ == "__main__":
     if not files:
         raise FileNotFoundError(f"No complete team-game files found in {RAW_DIR}")
     raw = pd.concat((pd.read_csv(path) for path in files), ignore_index=True)
-    raw = raw.drop_duplicates(["game_id", "team_id"], keep="last")
     full, clean = build_rolling_averages(raw)
     full.to_csv(OUTPUT, index=False)
     clean.to_csv(CLEAN_OUTPUT, index=False)

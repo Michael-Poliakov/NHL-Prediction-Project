@@ -80,7 +80,7 @@ def get_schedule(client: requests.Session, start_date: str, end_date: str, delay
                 home, away = game.get("homeTeam", {}), game.get("awayTeam", {})
                 games.append({
                     "game_id": str(game.get("id")),
-                    "game_date": game.get("gameDate"),
+                    "game_date": game_date,
                     "home_team_id": home.get("id"),
                     "away_team_id": away.get("id"),
                     "home_team": home.get("abbrev"),
