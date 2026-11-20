@@ -29,6 +29,7 @@ _thread_state = local()
 
 
 def session() -> requests.Session:
+    """Create an HTTP session that retries temporary NHL API failures."""
     retry = Retry(
         total=4,
         connect=4,
@@ -53,6 +54,7 @@ def worker_session() -> requests.Session:
 
 
 def get_json(client: requests.Session, url: str, delay: float) -> dict:
+    """Fetch one JSON response, fail on HTTP errors, and pause between requests."""
     response = client.get(url, timeout=30)
     response.raise_for_status()
     time.sleep(delay)
@@ -60,6 +62,7 @@ def get_json(client: requests.Session, url: str, delay: float) -> dict:
 
 
 def get_schedule(client: requests.Session, start_date: str, end_date: str, delay: float) -> pd.DataFrame:
+    """Page through the NHL schedule and keep completed regular-season games in the date range."""
     games, seen_dates = [], set()
     current = start_date
     while current and current <= end_date:
@@ -80,7 +83,7 @@ def get_schedule(client: requests.Session, start_date: str, end_date: str, delay
                 home, away = game.get("homeTeam", {}), game.get("awayTeam", {})
                 games.append({
                     "game_id": str(game.get("id")),
-                    "game_date": game.get("gameDate"),
+                    "game_date": game_date,
                     "home_team_id": home.get("id"),
                     "away_team_id": away.get("id"),
                     "home_team": home.get("abbrev"),
@@ -107,7 +110,9 @@ def get_schedule(client: requests.Session, start_date: str, end_date: str, delay
 def get_team_game_stats(
     schedule: pd.DataFrame, delay: float, workers: int = 4
 ) -> pd.DataFrame:
+    """Fetch team summary rows for each game in parallel and combine them into one table."""
     def fetch_game(game: dict) -> list[dict]:
+        """Fetch both teams' summary statistics for one scheduled game."""
         url = "https://api.nhle.com/stats/rest/en/team/summary"
         data = get_json(
             worker_session(), f"{url}?cayenneExp=gameId={game['game_id']}", delay
@@ -145,7 +150,9 @@ def get_team_game_stats(
 def get_player_derived_stats(
     schedule: pd.DataFrame, delay: float, workers: int = 4
 ) -> pd.DataFrame:
+    """Fetch box scores and sum player statistics into one row per team and game."""
     def fetch_game(game: dict) -> list[dict]:
+        """Read one box score and aggregate its players by team."""
         data = get_json(
             worker_session(),
             f"https://api-web.nhle.com/v1/gamecenter/{game['game_id']}/boxscore",
@@ -181,6 +188,7 @@ def get_player_derived_stats(
 
 
 def main() -> None:
+    """Read command-line options, collect each requested season, and write its CSV files."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--seasons", nargs="+", default=["20242025", "20252026"],

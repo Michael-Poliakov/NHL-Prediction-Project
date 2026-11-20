@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import pandas as pd
+from game_dates import resolve_dates
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 RAW_DIR = PROJECT_DIR / "data" / "raw"
@@ -26,8 +27,9 @@ ROLLING_STATS = [
 def prepare_model_data(
     games: pd.DataFrame, rolling: pd.DataFrame, schedules: pd.DataFrame | None = None
 ) -> pd.DataFrame:
-    games = games.copy()
-    rolling = rolling.copy()
+    """Match team rows to schedule home/away IDs and rolling features, then build one row per game."""
+    games = resolve_dates(games)
+    rolling = resolve_dates(rolling)
     for df in (games, rolling):
         df["game_id"] = df["game_id"].astype(str)
         df["game_date"] = pd.to_datetime(df["game_date"], errors="raise")
@@ -53,12 +55,18 @@ def prepare_model_data(
         raise ValueError(f"Could not match team rows to home/away schedule IDs for {missing} games")
 
     games = games.sort_values(["game_date", "game_id", "side"], kind="stable")
-    games = games.merge(rolling, on=["game_id", "team_id", "team_name", "game_date"], how="left")
+    games = games.merge(
+        rolling.drop(columns="team_name"), on=["game_id", "team_id", "game_date"],
+        how="left", validate="one_to_one", indicator=True)
+    if (games["_merge"] != "both").any():
+        raise ValueError("Missing rolling-feature rows")
 
     rows = []
     for game_id, group in games.groupby("game_id", sort=False):
         if len(group) != 2 or set(group["side"]) != {"home", "away"}:
-            continue
+            raise ValueError(f"Invalid home/away pair for game {game_id}")
+        if group["game_date"].nunique() != 1:
+            raise ValueError(f"Inconsistent team dates for game {game_id}")
         out = {"game_id": game_id, "game_date": group["game_date"].iloc[0]}
         for side in ("home", "away"):
             row = group.loc[group["side"] == side].iloc[0]
@@ -92,9 +100,7 @@ if __name__ == "__main__":
     if not schedule_files:
         raise FileNotFoundError(f"No schedule files found in {RAW_DIR}")
     games = pd.concat((pd.read_csv(path) for path in game_files), ignore_index=True)
-    games = games.drop_duplicates(["game_id", "team_id"], keep="last")
     schedules = pd.concat((pd.read_csv(path) for path in schedule_files), ignore_index=True)
-    schedules = schedules.drop_duplicates("game_id", keep="last")
     rolling = pd.read_csv(ROLLING)
     result = prepare_model_data(games, rolling, schedules)
     result.to_csv(OUTPUT, index=False)
