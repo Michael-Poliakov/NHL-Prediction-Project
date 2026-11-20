@@ -27,6 +27,7 @@ ROLLING_STATS = [
 def prepare_model_data(
     games: pd.DataFrame, rolling: pd.DataFrame, schedules: pd.DataFrame | None = None
 ) -> pd.DataFrame:
+    """Match team rows to schedule home/away IDs and rolling features, then build one row per game."""
     games = resolve_dates(games)
     rolling = resolve_dates(rolling)
     for df in (games, rolling):

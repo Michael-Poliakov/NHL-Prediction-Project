@@ -24,6 +24,7 @@ MODEL_PATH = MODEL_DIR / "logistic_regression.joblib"
 
 
 def feature_columns(df, feature_set="matchup"):
+    """Select either matchup-difference features or separate home and away features."""
     prefixes = ("matchup_",) if feature_set == "matchup" else ("home_rolling_", "away_rolling_")
     columns = sorted(c for c in df.columns if c.startswith(prefixes))
     if not columns:
@@ -32,6 +33,7 @@ def feature_columns(df, feature_set="matchup"):
 
 
 def prepare_training_data(df):
+    """Validate game records, derive the home-win target, and exclude games without ten-game histories."""
     df = df.copy()
     df["game_id"] = df["game_id"].astype(str)
     df["game_date"] = pd.to_datetime(df["game_date"], errors="raise")
@@ -62,6 +64,7 @@ def prepare_training_data(df):
 
 
 def season_splits(df):
+    """Build expanding season splits and reserve the newest season for final evaluation."""
     seasons = sorted(df["season"].unique())
     if len(seasons) < 3:
         raise ValueError("Need at least three seasons for selection and final holdout")
@@ -78,6 +81,7 @@ def season_splits(df):
 
 
 def make_pipeline(C):
+    """Create the imputation, scaling, and logistic-regression pipeline."""
     return Pipeline([
         ("imputer", SimpleImputer(strategy="median", keep_empty_features=True)),
         ("scaler", StandardScaler()),
@@ -88,6 +92,7 @@ def make_pipeline(C):
 
 
 def metrics(y, probabilities):
+    """Calculate accuracy, ROC AUC, log loss, and Brier score for predicted outcomes."""
     if not np.isfinite(probabilities).all():
         raise ValueError("Non-finite predicted probabilities")
     return {
@@ -99,6 +104,7 @@ def metrics(y, probabilities):
 
 
 def evaluate_split(df, split, features, C):
+    """Fit on earlier seasons and measure performance on the following season."""
     season, train, test = split
     model = make_pipeline(C).fit(df.loc[train, features], df.loc[train, "home_team_win"])
     probability = model.predict_proba(df.loc[test, features])[:, 1]
@@ -114,6 +120,7 @@ def evaluate_split(df, split, features, C):
 
 
 def train_and_evaluate(raw):
+    """Select settings on earlier seasons, evaluate the newest season, then refit on all eligible games."""
     df = prepare_training_data(raw)
     validation, holdout = season_splits(df)
     candidates = []
@@ -147,6 +154,7 @@ def train_and_evaluate(raw):
 
 
 def save_calibration(predictions):
+    """Save a plot comparing predicted win probabilities with observed win rates."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt

@@ -6,6 +6,7 @@ from game_dates import DATE_PATH
 
 
 def recover(path):
+    """Fetch authoritative schedule dates for the game IDs in one archived season file."""
     original = pd.read_csv(path, dtype={"game_id": str})
     year = int(path.stem[-8:-4])
     with session() as client:

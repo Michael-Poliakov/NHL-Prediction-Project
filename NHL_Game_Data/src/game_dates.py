@@ -6,6 +6,7 @@ DATE_PATH = Path(__file__).resolve().parents[1] / "data/processed/nhl_game_dates
 
 
 def resolve_dates(frame, date_path=DATE_PATH):
+    """Fill missing game dates from the recovered schedule lookup and fail if any remain unresolved."""
     frame = frame.copy()
     frame["game_id"] = frame["game_id"].astype(str)
     dates = pd.to_datetime(frame["game_date"], errors="raise")
